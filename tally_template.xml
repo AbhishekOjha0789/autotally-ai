@@ -1,0 +1,66 @@
+<ENVELOPE>
+    <HEADER>
+        <TALLYREQUEST>Import Data</TALLYREQUEST>
+    </HEADER>
+    <BODY>
+        <IMPORTDATA>
+            <REQUESTDESC>
+                <REPORTNAME>Vouchers</REPORTNAME>
+                <STATICVARIABLES>
+                    <SVCURRENTCOMPANY>{{ company_name }}</SVCURRENTCOMPANY>
+                </STATICVARIABLES>
+            </REQUESTDESC>
+            <REQUESTDATA>
+                <TALLYMESSAGE xmlns:UDF="TallyUDF">
+                    <VOUCHER VCHTYPE="Purchase" ACTION="Create" OBJVIEW="Accounting Voucher View">
+                        <DATE>{{ invoice.invoice_date }}</DATE>
+                        <REFERENCENO>{{ invoice.invoice_number }}</REFERENCENO>
+                        <PARTYLEDGERNAME>{{ invoice.vendor_name }}</PARTYLEDGERNAME>
+                        <PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>
+                        
+                        <!-- Credit the Vendor (Sundry Creditor) -->
+                        <ALLLEDGERENTRIES.LIST>
+                            <LEDGERNAME>{{ invoice.vendor_name }}</LEDGERNAME>
+                            <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+                            <AMOUNT>-{{ invoice.total_amount }}</AMOUNT>
+                        </ALLLEDGERENTRIES.LIST>
+                        
+                        <!-- Debit Purchase Account -->
+                        <ALLLEDGERENTRIES.LIST>
+                            <LEDGERNAME>Purchase Accounts</LEDGERNAME>
+                            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+                            <AMOUNT>{{ invoice.subtotal }}</AMOUNT>
+                        </ALLLEDGERENTRIES.LIST>
+
+                        {% if invoice.cgst > 0 %}
+                        <!-- Debit Input CGST -->
+                        <ALLLEDGERENTRIES.LIST>
+                            <LEDGERNAME>Input CGST</LEDGERNAME>
+                            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+                            <AMOUNT>{{ invoice.cgst }}</AMOUNT>
+                        </ALLLEDGERENTRIES.LIST>
+                        {% endif %}
+
+                        {% if invoice.sgst > 0 %}
+                        <!-- Debit Input SGST -->
+                        <ALLLEDGERENTRIES.LIST>
+                            <LEDGERNAME>Input SGST</LEDGERNAME>
+                            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+                            <AMOUNT>{{ invoice.sgst }}</AMOUNT>
+                        </ALLLEDGERENTRIES.LIST>
+                        {% endif %}
+
+                        {% if invoice.igst > 0 %}
+                        <!-- Debit Input IGST -->
+                        <ALLLEDGERENTRIES.LIST>
+                            <LEDGERNAME>Input IGST</LEDGERNAME>
+                            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+                            <AMOUNT>{{ invoice.igst }}</AMOUNT>
+                        </ALLLEDGERENTRIES.LIST>
+                        {% endif %}
+                    </VOUCHER>
+                </TALLYMESSAGE>
+            </REQUESTDATA>
+        </IMPORTDATA>
+    </BODY>
+</ENVELOPE>
