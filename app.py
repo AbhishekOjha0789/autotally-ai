@@ -24,7 +24,7 @@ if uploaded_file is not None:
                 data = {"company_name": company_name}
                 
                 # Call our local FastAPI backend
-                response = requests.post("http://127.0.0.1:8000/process-invoice", files=files, data=data)
+                response = requests.post("https://autotally-ai.onrender.com/process-invoice", files=files, data=data)
                 
                 if response.status_code == 200:
                     xml_output = response.text
