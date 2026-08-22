@@ -13,6 +13,7 @@ db = client["autotally_ai"]
 users_collection = db["users"]
 receipts_collection = db["receipts"]
 products_collection = db["products"]  # <-- New collection for store inventory
+receipts_collection = db["receipts"]
 
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()

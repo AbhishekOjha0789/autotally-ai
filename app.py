@@ -4,6 +4,7 @@ import zipfile
 import io
 import json
 from datetime import datetime
+import os
 
 # Page configuration
 st.set_page_config(
@@ -21,10 +22,14 @@ st.markdown("""
         background-color: #0f172a;
         color: #f8fafc;
     }
-    /* Hide default Streamlit branding */
+    
+    /* Hide default Streamlit branding, header, and top toolbar/GitHub buttons */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
+    [data-testid="stToolbar"] {visibility: hidden; display: none !important;}
+    [data-testid="stDecoration"] {display: none !important;}
+    .viewerBadge_container__1QSob {display: none !important;}
     
     /* Custom Card Containers */
     .pos-card {
@@ -61,6 +66,16 @@ API_BASE_URL = "https://autotally-ai.onrender.com"  # Update if running locally
 
 # --- AUTHENTICATION PORTAL (PROFESSIONAL SPLIT SCREEN) ---
 if not st.session_state.logged_in:
+    # Hide sidebar only when logged out
+    st.markdown("""
+        <style>
+            [data-testid="stSidebar"] {
+                transform: translateX(-100%);
+                visibility: hidden;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+    
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
@@ -77,7 +92,6 @@ if not st.session_state.logged_in:
                 
                 if l_submit:
                     if l_user.strip() and l_pass.strip():
-                        # Show a spinner because free servers take a few seconds on cold starts
                         with st.spinner("Connecting to secure server (Waking up cloud instance)..."):
                             try:
                                 res = requests.post(f"{API_BASE_URL}/login", json={"username": l_user, "password": l_pass}, timeout=15)
@@ -126,21 +140,11 @@ if not st.session_state.logged_in:
 
 # --- PROFESSIONAL POS DASHBOARD (WHEN LOGGED IN) ---
 else:
-    # Sidebar navigation & controls
-    with st.sidebar:
-        st.markdown(f"### 🏢 Store: **{st.session_state.username.upper()}**")
-        st.caption("Active POS Terminal #01")
-        st.markdown("---")
-        
-        # 1. UPDATED NAVIGATION OPTIONS TO INCLUDE INVENTORY MANAGEMENT
-        menu_selection = st.radio("Navigation", [
-            "🛒 POS & Barcode Billing", 
-            "📦 Inventory Management", 
-            "📂 Saved XML History Hub", 
-            "⚙️ Tally Integration Settings"
-        ])
-        
-        st.markdown("---")
+    # Top utility bar for store identity and session control
+    top_col1, top_col2 = st.columns([4, 1])
+    with top_col1:
+        st.markdown(f"### 🏢 Store: **{st.session_state.username.upper()}** | Active POS Terminal #01")
+    with top_col2:
         if st.button("🚪 Terminate Session", use_container_width=True):
             st.session_state.logged_in = False
             st.session_state.user_id = None
@@ -148,8 +152,76 @@ else:
             st.session_state.cart_items = []
             st.rerun()
 
-    # --- TAB 1: POS & BARCODE BILLING WORKFLOW ---
-    if menu_selection == "🛒 POS & Barcode Billing":
+    st.markdown("---")
+
+    # Main Navigation Tabs (Replaces the sidebar completely)
+    menu_selection = st.radio(
+        "Navigation Hub", 
+        [
+            "⚡ AI Invoice & Tally XML Builder",
+            "🛒 POS & Barcode Billing", 
+            "📦 Inventory Management", 
+            "📂 Saved XML History Hub", 
+            "⚙️ Tally Integration Settings"
+        ],
+        horizontal=True
+    )
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # --- TAB: AI INVOICE & TALLY XML BUILDER (CORE FEATURE) ---
+    if menu_selection == "⚡ AI Invoice & Tally XML Builder":
+        st.markdown("## ⚡ AI Invoice Parser & Tally XML Generator")
+        st.markdown("Upload any digital purchase invoice (PDF or Image). Our local ML Gatekeeper validates the structure, Gemini extracts the line items, math is verified, and a Tally-compliant XML file is generated instantly.")
+        
+        col_upload, col_preview = st.columns([1.2, 1])
+        
+        with col_upload:
+            with st.form("invoice_upload_form"):
+                company_input = st.text_input("Tally Company Ledger Name", value="My Company")
+                uploaded_file = st.file_uploader("Upload Purchase Invoice (PDF, PNG, JPG)", type=["pdf", "png", "jpg", "jpeg"])
+                
+                process_btn = st.form_submit_button("🚀 Process & Generate Tally XML", use_container_width=True)
+                
+                if process_btn:
+                    if uploaded_file is not None:
+                        with st.spinner("Analyzing invoice with AI & Gatekeeper..."):
+                            try:
+                                files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
+                                params = {"company_name": company_input}
+                                
+                                res = requests.post(f"{API_BASE_URL}/process-invoice", files=files, params=params, timeout=30)
+                                
+                                if res.status_code == 200:
+                                    xml_output = res.text
+                                    st.success("Invoice successfully processed and XML generated!")
+                                    
+                                    # Store in session state for download
+                                    st.session_state.last_xml = xml_output
+                                    st.session_state.last_filename = f"{os.path.splitext(uploaded_file.name)[0]}_tally.xml"
+                                else:
+                                    st.error(f"Processing failed: {res.json().get('detail', 'Unknown error')}")
+                            except Exception as e:
+                                st.error(f"Connection error: {str(e)}")
+                    else:
+                        st.warning("Please upload an invoice file first.")
+                        
+        with col_preview:
+            st.markdown("### 📄 XML Output & Download")
+            if "last_xml" in st.session_state and st.session_state.last_xml:
+                st.text_area("Generated Tally XML Preview", value=st.session_state.last_xml, height=300)
+                st.download_button(
+                    label="📥 Download Tally XML File",
+                    data=st.session_state.last_xml,
+                    file_name=st.session_state.get("last_filename", "tally_voucher.xml"),
+                    mime="application/xml",
+                    use_container_width=True
+                )
+            else:
+                st.info("Upload and process an invoice on the left to preview and download your Tally-compliant XML file here.")
+
+    # --- TAB 2: POS & BARCODE BILLING WORKFLOW ---
+    elif menu_selection == "🛒 POS & Barcode Billing":
         st.markdown("## 🛒 Supermarket POS Terminal")
         st.markdown("Scan store barcodes to check live inventory stock, validate quantities, and sync Tally XML vouchers.")
         
@@ -245,7 +317,7 @@ else:
                     except Exception as e:
                         st.error(f"Error during checkout: {str(e)}")
 
-    # --- TAB 2: INVENTORY MANAGEMENT & LIVE STOCK VIEW ---
+    # --- TAB 3: INVENTORY MANAGEMENT & LIVE STOCK VIEW ---
     elif menu_selection == "📦 Inventory Management":
         st.markdown("## 📦 Supermarket Inventory & Stock Control")
         st.markdown("Add new stock or view real-time inventory levels across your store.")
@@ -306,22 +378,58 @@ else:
             except:
                 st.error("Connection failed while reaching inventory database.")
 
-    # --- TAB 3: SAVED XML HISTORY HUB ---
+    # --- TAB 4: SAVED XML HISTORY HUB ---
     elif menu_selection == "📂 Saved XML History Hub":
         st.markdown("## 📂 Centralized XML History & One-Click Fetch")
-        st.markdown("Access all previously synced supermarket receipts, filter instantly, or batch download files formatted for Tally import.")
+        st.markdown("Access all previously synced supermarket receipts, filter instantly, or download files formatted for Tally import.")
         
-        search_query = st.text_input("🔍 Search receipts by vendor or bill ID...", "")
-        
-        col_filters, col_actions = st.columns([3, 1])
-        with col_actions:
-            if st.button("📥 Download Filtered Batch (.zip)", use_container_width=True):
-                st.info("Preparing batch export package...")
+        # Fetch history from backend using current user_id
+        try:
+            res = requests.get(f"{API_BASE_URL}/receipts/{st.session_state.user_id}", timeout=10)
+            if res.status_code == 200:
+                receipts = res.json()
+                
+                if receipts:
+                    search_query = st.text_input("🔍 Search receipts by vendor or company name...", "").lower()
+                    
+                    filtered_receipts = [
+                        r for r in receipts 
+                        if search_query in r.get("vendor_name", "").lower() or search_query in r.get("company_name", "").lower()
+                    ]
+                    
+                    st.markdown(f"Showing **{len(filtered_receipts)}** saved transaction(s):")
+                    st.markdown("---")
+                    
+                    for idx, rec in enumerate(filtered_receipts):
+                        with st.expander(f"🧾 Vendor: {rec.get('vendor_name', 'Unknown')} | Company: {rec.get('company_name', 'N/A')} | Date: {rec.get('timestamp', 'Recent')}"):
+                            col_info, col_dl = st.columns([2, 1])
+                            
+                            with col_info:
+                                st.write(f"**Total Amount:** ₹{rec.get('grand_total', 0):.2f}")
+                                items = rec.get("items", [])
+                                st.write(f"**Items Count:** {len(items)}")
+                                
+                                # Optional: Show line items table
+                                if items:
+                                    st.dataframe(items, use_container_width=True, hide_index=True)
+                                    
+                            with col_dl:
+                                xml_content = rec.get("xml_data", "<XML>Not Available</XML>")
+                                st.download_button(
+                                    label="📥 Download XML",
+                                    data=xml_content,
+                                    file_name=f"receipt_{idx+1}_tally.xml",
+                                    mime="application/xml",
+                                    key=f"dl_xml_{idx}"
+                                )
+                else:
+                    st.info("No saved invoices found in your secure database yet. Process transactions via the POS terminal or upload an invoice to populate your history.")
+            else:
+                st.warning("Could not retrieve transaction history from the server.")
+        except Exception as e:
+            st.error(f"Connection error while fetching history: {str(e)}")
 
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.info("No saved invoices found in your secure database yet. Process transactions via the POS terminal to populate history.")
-
-    # --- TAB 4: TALLY INTEGRATION SETTINGS ---
+    # --- TAB 5: TALLY INTEGRATION SETTINGS ---
     elif menu_selection == "⚙️ Tally Integration Settings":
         st.markdown("## ⚙️ Tally ERP / Prime Sync Settings")
         st.markdown("Configure local gateway ports and company master configurations for seamless XML importing.")

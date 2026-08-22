@@ -20,7 +20,8 @@ from database import (
     register_user_db, 
     authenticate_user_db, 
     get_product_by_barcode, 
-    process_pos_checkout
+    process_pos_checkout,
+    receipts_collection
 )
 
 load_dotenv()  # Load environment variables from .env file
@@ -247,3 +248,13 @@ def add_product(payload: ProductAddRequest):
 def get_all_products():
     """Returns all inventory items for management view."""
     return get_all_products_db()
+
+@app.get("/receipts/{user_id}")
+def get_user_receipts(user_id: str):
+    """Fetches all saved receipts/XML history for a specific user."""
+    try:
+        # Assuming your collection is named receipts_collection or similar in your database file
+        receipts = list(receipts_collection.find({"user_id": user_id}, {"_id": 0}))
+        return receipts
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
