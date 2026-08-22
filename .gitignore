@@ -4,10 +4,18 @@ __pycache__/
 
 # Virtual environments
 venv/
-env/
 
 # Environment variables & local secrets
 .env
 
-# Sample temporary files
+# Local datasets and variation test folders
+dataset/
+test_variations/
+
+# Local sample images and scratchpads
 sample_test_invoice.png
+
+# Local development and streaming test scripts (optional, keep out of git)
+stream_test.py
+view_stream.py
+test_model_resilience.py
