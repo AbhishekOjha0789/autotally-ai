@@ -87,3 +87,26 @@ def process_pos_checkout(user_id: str, company_name: str, vendor_name: str, item
     receipts_collection.insert_one(receipt_doc)
     
     return True, "Checkout successful"
+
+def add_or_update_product_db(barcode: str, name: str, price: float, stock: int):
+    """Adds a new product or updates existing stock/price by barcode."""
+    barcode = barcode.strip()
+    existing = products_collection.find_one({"barcode": barcode})
+    
+    if existing:
+        # Update existing product stock and price
+        products_collection.update_one(
+            {"barcode": barcode},
+            {"$set": {"name": name, "price": price}, "$inc": {"stock": stock}}
+        )
+        return True, f"Updated stock for {name} (+{stock} units)."
+    else:
+        # Insert brand new product
+        new_prod = {
+            "barcode": barcode,
+            "name": name.strip(),
+            "price": float(price),
+            "stock": int(stock)
+        }
+        products_collection.insert_one(new_prod)
+        return True, f"Successfully added new product: {name}."

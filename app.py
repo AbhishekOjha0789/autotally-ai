@@ -125,7 +125,13 @@ else:
         st.caption("Active POS Terminal #01")
         st.markdown("---")
         
-        menu_selection = st.radio("Navigation", ["🛒 POS & Barcode Billing", "📂 Saved XML History Hub", "⚙️ Tally Integration Settings"])
+        # 1. UPDATED NAVIGATION OPTIONS TO INCLUDE INVENTORY MANAGEMENT
+        menu_selection = st.radio("Navigation", [
+            "🛒 POS & Barcode Billing", 
+            "📦 Inventory Management", 
+            "📂 Saved XML History Hub", 
+            "⚙️ Tally Integration Settings"
+        ])
         
         st.markdown("---")
         if st.button("🚪 Terminate Session", use_container_width=True):
@@ -153,7 +159,6 @@ else:
                 
                 if add_btn and barcode_input.strip():
                     try:
-                        # Query backend inventory database for live stock and validation
                         res = requests.get(f"{API_BASE_URL}/product/{barcode_input.strip()}")
                         if res.status_code == 200:
                             prod_data = res.json()
@@ -175,7 +180,6 @@ else:
                     except:
                         st.error("Connection failed while reaching inventory database.")
             
-            # Display current active cart items table
             if st.session_state.cart_items:
                 st.markdown("#### Current Cart Bill")
                 cart_display = []
@@ -200,7 +204,7 @@ else:
             vendor_name = st.text_input("Supplier / Vendor Name", value="Local Distributor Corp")
             
             subtotal = sum([i["total"] for i in st.session_state.cart_items])
-            tax_amount = subtotal * 0.05  # Standard 5% GST calculation example
+            tax_amount = subtotal * 0.05
             grand_total = subtotal + tax_amount
             
             st.markdown(f"""
@@ -234,7 +238,52 @@ else:
                     except Exception as e:
                         st.error(f"Error during checkout: {str(e)}")
 
-    # --- TAB 2: SAVED XML HISTORY HUB ---
+    # --- TAB 2: INVENTORY MANAGEMENT (NEWLY ADDED) ---
+    elif menu_selection == "📦 Inventory Management":
+        st.markdown("## 📦 Supermarket Inventory & Stock Control")
+        st.markdown("Scan or type a barcode to add new products to your database or restock existing inventory items.")
+        
+        col_form, col_info = st.columns([1.5, 1])
+        
+        with col_form:
+            with st.form("add_product_form", clear_on_submit=True):
+                st.markdown("### Add / Restock Item")
+                inv_barcode = st.text_input("Product Barcode / SKU")
+                inv_name = st.text_input("Product Name")
+                inv_price = st.number_input("Selling Price (₹)", min_value=0.0, value=50.0)
+                inv_stock = st.number_input("Stock Quantity to Add", min_value=1, value=10)
+                
+                submit_inv = st.form_submit_button("💾 Save to Inventory Master", use_container_width=True)
+                
+                if submit_inv:
+                    if inv_barcode.strip() and inv_name.strip():
+                        try:
+                            payload = {
+                                "barcode": inv_barcode.strip(),
+                                "name": inv_name.strip(),
+                                "price": inv_price,
+                                "stock": inv_stock
+                            }
+                            res = requests.post(f"{API_BASE_URL}/product/add", json=payload)
+                            if res.status_code == 200:
+                                st.success(res.json().get("message", "Inventory updated successfully!"))
+                            else:
+                                st.error(res.json().get("detail", "Failed to update inventory."))
+                        except Exception as e:
+                            st.error(f"Connection error: {str(e)}")
+                    else:
+                        st.error("Please fill in both the barcode and product name.")
+                        
+        with col_info:
+            st.markdown("""
+                <div style='background: #1e293b; padding: 20px; border-radius: 8px; border: 1px solid #334155;'>
+                    <h4>💡 How Restocking Works</h4>
+                    <p>• If you enter a <b>new barcode</b>, it creates a brand new product in your MongoDB database.</p>
+                    <p>• If you enter an <b>existing barcode</b>, it updates the price and adds the new quantity directly to your active stock count.</p>
+                </div>
+            """, unsafe_allow_html=True)
+
+    # --- TAB 3: SAVED XML HISTORY HUB ---
     elif menu_selection == "📂 Saved XML History Hub":
         st.markdown("## 📂 Centralized XML History & One-Click Fetch")
         st.markdown("Access all previously synced supermarket receipts, filter instantly, or batch download files formatted for Tally import.")
@@ -249,7 +298,7 @@ else:
         st.markdown("<br>", unsafe_allow_html=True)
         st.info("No saved invoices found in your secure database yet. Process transactions via the POS terminal to populate history.")
 
-    # --- TAB 3: TALLY INTEGRATION SETTINGS ---
+    # --- TAB 4: TALLY INTEGRATION SETTINGS ---
     elif menu_selection == "⚙️ Tally Integration Settings":
         st.markdown("## ⚙️ Tally ERP / Prime Sync Settings")
         st.markdown("Configure local gateway ports and company master configurations for seamless XML importing.")

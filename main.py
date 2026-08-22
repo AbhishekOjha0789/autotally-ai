@@ -15,6 +15,7 @@ from typing import List
 
 # Import the new POS database functions from database.py
 from database import (
+    add_or_update_product_db,
     register_user_db, 
     authenticate_user_db, 
     get_product_by_barcode, 
@@ -220,4 +221,23 @@ def checkout(payload: CheckoutRequest):
     if not success:
         raise HTTPException(status_code=400, detail=message)
         
+    return {"success": True, "message": message}
+
+class ProductAddRequest(BaseModel):
+    barcode: str
+    name: str
+    price: float
+    stock: int
+
+@app.post("/product/add")
+def add_product(payload: ProductAddRequest):
+    """Adds or restocks inventory items."""
+    success, message = add_or_update_product_db(
+        barcode=payload.barcode,
+        name=payload.name,
+        price=payload.price,
+        stock=payload.stock
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
     return {"success": True, "message": message}
