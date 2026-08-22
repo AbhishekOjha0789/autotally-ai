@@ -10,6 +10,9 @@ from extractor import extract_invoice_data
 from validator import validate_invoice_math
 from builder import generate_tally_xml
 
+from database import register_user_db, authenticate_user_db
+from pydantic import BaseModel
+
 load_dotenv()  # Load environment variables from .env file
 
 app = FastAPI(title="AutoTally AI API", version="1.0")
@@ -149,3 +152,21 @@ async def process_invoice(file: UploadFile = File(...), company_name: str = "My 
         raise HTTPException(status_code=500, detail=str(e))
     
     return rendered_xml
+
+class UserAuth(BaseModel):
+    username: str
+    password: str
+
+@app.post("/register")
+def register(user: UserAuth):
+    success, result = register_user_db(user.username, user.password)
+    if not success:
+        raise HTTPException(status_code=400, detail=result)
+    return {"success": True, "user_id": result, "message": "Registered successfully"}
+
+@app.post("/login")
+def login(user: UserAuth):
+    success, result = authenticate_user_db(user.username, user.password)
+    if not success:
+        raise HTTPException(status_code=401, detail=result)
+    return {"success": True, "user_id": result, "message": "Logged in successfully"}
