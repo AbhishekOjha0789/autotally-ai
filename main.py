@@ -10,8 +10,16 @@ from extractor import extract_invoice_data
 from validator import validate_invoice_math
 from builder import generate_tally_xml
 
-from database import register_user_db, authenticate_user_db
 from pydantic import BaseModel
+from typing import List
+
+# Import the new POS database functions from database.py
+from database import (
+    register_user_db, 
+    authenticate_user_db, 
+    get_product_by_barcode, 
+    process_pos_checkout
+)
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -170,3 +178,46 @@ def login(user: UserAuth):
     if not success:
         raise HTTPException(status_code=401, detail=result)
     return {"success": True, "user_id": result, "message": "Logged in successfully"}
+
+@app.get("/product/{barcode}")
+def get_product(barcode: str):
+    """
+    Fetches product details and live stock levels by barcode for the POS terminal.
+    """
+    product = get_product_by_barcode(barcode)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found in inventory.")
+    return product
+
+class CartItem(BaseModel):
+    barcode: str
+    name: str
+    quantity: int
+    rate: float
+    total: float
+
+class CheckoutRequest(BaseModel):
+    user_id: str
+    company_name: str
+    vendor_name: str
+    items: List[CartItem]
+
+@app.post("/checkout")
+def checkout(payload: CheckoutRequest):
+    """
+    Processes the POS cart checkout: decrements stock from inventory and saves the voucher log.
+    """
+    # Convert Pydantic items to dictionaries
+    items_list = [item.dict() for item in payload.items]
+    
+    success, message = process_pos_checkout(
+        user_id=payload.user_id,
+        company_name=payload.company_name,
+        vendor_name=payload.vendor_name,
+        items=items_list
+    )
+    
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+        
+    return {"success": True, "message": message}

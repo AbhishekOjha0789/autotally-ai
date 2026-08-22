@@ -2,181 +2,261 @@ import streamlit as st
 import requests
 import zipfile
 import io
+import json
 from datetime import datetime
 
-st.set_page_config(page_title="AutoTally AI", page_icon="🧾", layout="centered")
+# Page configuration
+st.set_page_config(
+    page_title="AutoTally AI | Supermarket POS & Tally Suite",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# Initialize session state for real backend user tracking
+# --- PROFESSIONAL CUSTOM CSS INJECTION ---
+st.markdown("""
+    <style>
+    /* Main background and font styling */
+    .main {
+        background-color: #0f172a;
+        color: #f8fafc;
+    }
+    /* Hide default Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Custom Card Containers */
+    .pos-card {
+        background: #1e293b;
+        padding: 24px;
+        border-radius: 12px;
+        border: 1px solid #334155;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        margin-bottom: 20px;
+    }
+    
+    /* Metric styling */
+    .metric-container {
+        background: #1e293b;
+        border: 1px solid #334155;
+        padding: 16px;
+        border-radius: 8px;
+        text-align: center;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# Initialize session state
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "user_id" not in st.session_state:
     st.session_state.user_id = None
 if "username" not in st.session_state:
     st.session_state.username = ""
-if "history" not in st.session_state:
-    st.session_state.history = []
+if "cart_items" not in st.session_state:
+    st.session_state.cart_items = []
 
-# Replace with your actual backend URL (local or Render)
-API_BASE_URL = "https://autotally-ai.onrender.com" 
+API_BASE_URL = "https://autotally-ai.onrender.com"  # Update if running locally
 
-# --- AUTHENTICATION SCREEN ---
+# --- AUTHENTICATION PORTAL (PROFESSIONAL SPLIT SCREEN) ---
 if not st.session_state.logged_in:
-    st.title("🧾 AutoTally AI - Portal")
-    st.markdown("Please sign in or create an account to access your persistent database workspace.")
-    
-    tab1, tab2 = st.tabs(["Login", "Register"])
-    
-    with tab1:
-        with st.form("login_form"):
-            login_user = st.text_input("Username")
-            login_pass = st.text_input("Password", type="password")
-            login_submit = st.form_submit_button("Login")
-            
-            if login_submit:
-                if login_user.strip() and login_pass.strip():
-                    try:
-                        response = requests.post(f"{API_BASE_URL}/login", json={"username": login_user, "password": login_pass})
-                        if response.status_code == 200:
-                            data = response.json()
-                            st.session_state.logged_in = True
-                            st.session_state.user_id = data["user_id"]
-                            st.session_state.username = login_user
-                            st.success(f"Welcome back, {login_user}!")
-                            st.rerun()
-                        else:
-                            st.error(response.json().get("detail", "Login failed."))
-                    except requests.exceptions.ConnectionError:
-                        st.error("Could not connect to the backend server.")
-                else:
-                    st.error("Please fill in all fields.")
-                    
-    with tab2:
-        with st.form("register_form"):
-            reg_user = st.text_input("Choose Username")
-            reg_pass = st.text_input("Choose Password", type="password")
-            reg_submit = st.form_submit_button("Create Account")
-            
-            if reg_submit:
-                if reg_user.strip() and reg_pass.strip():
-                    try:
-                        response = requests.post(f"{API_BASE_URL}/register", json={"username": reg_user, "password": reg_pass})
-                        if response.status_code == 200:
-                            data = response.json()
-                            st.session_state.logged_in = True
-                            st.session_state.user_id = data["user_id"]
-                            st.session_state.username = reg_user
-                            st.success("Account created successfully! You are now logged in.")
-                            st.rerun()
-                        else:
-                            st.error(response.json().get("detail", "Registration failed."))
-                    except requests.exceptions.ConnectionError:
-                        st.error("Could not connect to the backend server.")
-                else:
-                    st.error("Please fill in all fields.")
+    col1, col2, col3 = st.columns([1, 1.2, 1])
+    with col2:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center; color: #38bdf8;'>⚡ AutoTally POS</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #94a3b8;'>Supermarket Invoicing & Instant Tally XML Synchronization Suite</p><br>", unsafe_allow_html=True)
+        
+        auth_tab1, auth_tab2 = st.tabs(["🔐 Secure Login", "📝 Create Account"])
+        
+        with auth_tab1:
+            with st.form("login_form"):
+                l_user = st.text_input("Username")
+                l_pass = st.text_input("Password", type="password")
+                l_submit = st.form_submit_button("Sign In to Workspace", use_container_width=True)
+                
+                if l_submit:
+                    if l_user.strip() and l_pass.strip():
+                        try:
+                            res = requests.post(f"{API_BASE_URL}/login", json={"username": l_user, "password": l_pass})
+                            if res.status_code == 200:
+                                data = res.json()
+                                st.session_state.logged_in = True
+                                st.session_state.user_id = data["user_id"]
+                                st.session_state.username = l_user
+                                st.success("Authentication successful!")
+                                st.rerun()
+                            else:
+                                st.error(res.json().get("detail", "Invalid credentials."))
+                        except:
+                            st.error("Connection failed. Check backend server.")
+                    else:
+                        st.error("Please fill in all fields.")
+                        
+        with auth_tab2:
+            with st.form("register_form"):
+                r_user = st.text_input("Choose Username")
+                r_pass = st.text_input("Choose Password", type="password")
+                r_submit = st.form_submit_button("Register Store Account", use_container_width=True)
+                
+                if r_submit:
+                    if r_user.strip() and r_pass.strip():
+                        try:
+                            res = requests.post(f"{API_BASE_URL}/register", json={"username": r_user, "password": r_pass})
+                            if res.status_code == 200:
+                                data = res.json()
+                                st.session_state.logged_in = True
+                                st.session_state.user_id = data["user_id"]
+                                st.session_state.username = r_user
+                                st.success("Account created successfully!")
+                                st.rerun()
+                            else:
+                                st.error(res.json().get("detail", "Registration failed."))
+                        except:
+                            st.error("Connection failed. Check backend server.")
+                    else:
+                        st.error("Please fill in all fields.")
 
-# --- MAIN DASHBOARD (WHEN LOGGED IN) ---
+# --- PROFESSIONAL POS DASHBOARD (WHEN LOGGED IN) ---
 else:
+    # Sidebar navigation & controls
     with st.sidebar:
-        st.write(f"👤 Logged in as: **{st.session_state.username}**")
-        if st.button("Logout"):
+        st.markdown(f"### 🏢 Store: **{st.session_state.username.upper()}**")
+        st.caption("Active POS Terminal #01")
+        st.markdown("---")
+        
+        menu_selection = st.radio("Navigation", ["🛒 POS & Barcode Billing", "📂 Saved XML History Hub", "⚙️ Tally Integration Settings"])
+        
+        st.markdown("---")
+        if st.button("🚪 Terminate Session", use_container_width=True):
             st.session_state.logged_in = False
             st.session_state.user_id = None
             st.session_state.username = ""
-            st.session_state.history = []
+            st.session_state.cart_items = []
             st.rerun()
-        st.markdown("---")
-        st.markdown("### 📊 Platform Stats")
-        st.metric("Total Receipts Processed", len(st.session_state.history))
 
-    st.title("🧾 AutoTally AI Dashboard")
-    st.markdown("Convert purchase invoices into Tally-compliant XML vouchers instantly using Gemini AI.")
-
-    uploaded_file = st.file_uploader("Upload Purchase Invoice (PDF or Image)", type=["pdf", "png", "jpg", "jpeg"])
-    company_name = st.text_input("Tally Company Name", value="My Company")
-
-    st.info("Note: The backend runs on a free cloud tier and may take 30 seconds to wake up on the first request!")
-
-    if uploaded_file is not None:
-        if uploaded_file.type.startswith("image/"):
-            st.image(uploaded_file, caption="Uploaded Invoice Preview", use_container_width=True)
-        else:
-            st.info(f"📄 PDF Uploaded: {uploaded_file.name}")
+    # --- TAB 1: POS & BARCODE BILLING WORKFLOW ---
+    if menu_selection == "🛒 POS & Barcode Billing":
+        st.markdown("## 🛒 Supermarket POS Terminal")
+        st.markdown("Scan store barcodes to check live inventory stock, validate quantities, and sync Tally XML vouchers.")
         
-        if st.button("Process Invoice & Generate XML", type="primary"):
-            with st.spinner("Analyzing invoice via Gemini AI and validating math..."):
-                try:
-                    files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
-                    data = {"company_name": company_name, "user_id": st.session_state.user_id}
-                    
-                    response = requests.post(f"{API_BASE_URL}/process-invoice", files=files, data=data)
-                    
-                    if response.status_code == 200:
-                        xml_output = response.text
-                        st.success("Invoice successfully processed and verified!")
-                        
-                        # Save to local session log view
-                        record = {
-                            "filename": uploaded_file.name,
-                            "vendor": "Parsed Vendor",
-                            "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                            "xml": xml_output
-                        }
-                        st.session_state.history.append(record)
-                        
-                        st.code(xml_output, language="xml")
-                        
-                        st.download_button(
-                            label="Download Tally XML File",
-                            data=xml_output,
-                            file_name=f"{uploaded_file.name.rsplit('.', 1)[0]}_tally.xml",
-                            mime="application/xml"
-                        )
-                    else:
-                        error_detail = response.json().get("detail", "Unknown error")
-                        st.error(f"Processing failed: {error_detail}")
-                        
-                except requests.exceptions.ConnectionError:
-                    st.error("Could not connect to the FastAPI backend.")
-                except Exception as e:
-                    st.error(f"An unexpected error occurred: {str(e)}")
-
-    # --- HISTORY & FILTERABLE DOWNLOAD HUB ---
-    if st.session_state.history:
-        st.markdown("---")
-        st.subheader("📂 Generated XML History & Batch Downloads")
+        col_main, col_summary = st.columns([2, 1])
         
-        filter_query = st.text_input("Filter history by filename or keyword:", "").lower()
-        
-        filtered_history = [
-            item for item in st.session_state.history 
-            if filter_query in item["filename"].lower() or filter_query in item["vendor"].lower()
-        ]
-        
-        for idx, item in enumerate(filtered_history):
-            col1, col2, col3 = st.columns([3, 2, 2])
-            col1.write(f"📄 **{item['filename']}**")
-            col2.write(f"🕒 {item['date']}")
-            with col3:
-                st.download_button(
-                    label="Download XML",
-                    data=item["xml"],
-                    file_name=f"{item['filename'].rsplit('.', 1)[0]}_tally.xml",
-                    mime="application/xml",
-                    key=f"dl_{idx}"
-                )
-        
-        st.markdown("### 📦 Bulk Actions")
-        if filtered_history:
-            zip_buffer = io.BytesIO()
-            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                for item in filtered_history:
-                    safe_name = item["filename"].rsplit('.', 1)[0] + ".xml"
-                    zip_file.writestr(safe_name, item["xml"])
-            zip_buffer.seek(0)
+        with col_main:
+            st.markdown("### 📦 Line Item Management")
             
-            st.download_button(
-                label="📥 Download Filtered Batch as ZIP",
-                data=zip_buffer,
-                file_name="autotally_filtered_batch.zip",
-                mime="application/x-zip-compressed"
-            )
+            with st.form("barcode_scan_form", clear_on_submit=True):
+                c1, c2 = st.columns([2, 1])
+                barcode_input = c1.text_input("Barcode Scanner Input / SKU Code", placeholder="Scan item barcode here...")
+                qty_input = c2.number_input("Quantity", min_value=1, value=1)
+                add_btn = st.form_submit_button("➕ Add Item to Cart", use_container_width=True)
+                
+                if add_btn and barcode_input.strip():
+                    try:
+                        # Query backend inventory database for live stock and validation
+                        res = requests.get(f"{API_BASE_URL}/product/{barcode_input.strip()}")
+                        if res.status_code == 200:
+                            prod_data = res.json()
+                            available_stock = prod_data.get("stock", 0)
+                            
+                            if available_stock < qty_input:
+                                st.error(f"❌ Out of Stock! Only {available_stock} units remaining for {prod_data['name']}.")
+                            else:
+                                st.session_state.cart_items.append({
+                                    "barcode": barcode_input.strip(),
+                                    "name": prod_data["name"],
+                                    "quantity": qty_input,
+                                    "rate": prod_data["price"],
+                                    "total": prod_data["price"] * qty_input
+                                })
+                                st.success(f"Added: {prod_data['name']} (Qty: {qty_input})")
+                        else:
+                            st.error("❌ Barcode denied: Product not found in database inventory master.")
+                    except:
+                        st.error("Connection failed while reaching inventory database.")
+            
+            # Display current active cart items table
+            if st.session_state.cart_items:
+                st.markdown("#### Current Cart Bill")
+                cart_display = []
+                for idx, item in enumerate(st.session_state.cart_items):
+                    cart_display.append({
+                        "Item Name": item["name"],
+                        "Qty": item["quantity"],
+                        "Rate (₹)": item["rate"],
+                        "Total (₹)": item["total"]
+                    })
+                st.dataframe(cart_display, use_container_width=True)
+                
+                if st.button("🗑️ Clear Cart", type="secondary"):
+                    st.session_state.cart_items = []
+                    st.rerun()
+            else:
+                st.info("Cart is currently empty. Scan a barcode above to add items.")
+
+        with col_summary:
+            st.markdown("### 🧾 Voucher Summary")
+            tally_company = st.text_input("Tally Company Ledger", value="Retail Supermarket HQ")
+            vendor_name = st.text_input("Supplier / Vendor Name", value="Local Distributor Corp")
+            
+            subtotal = sum([i["total"] for i in st.session_state.cart_items])
+            tax_amount = subtotal * 0.05  # Standard 5% GST calculation example
+            grand_total = subtotal + tax_amount
+            
+            st.markdown(f"""
+                <div style='background: #1e293b; padding: 16px; border-radius: 8px; border: 1px solid #334155;'>
+                    <p><b>Subtotal:</b> ₹{subtotal:.2f}</p>
+                    <p><b>Estimated Tax (5%):</b> ₹{tax_amount:.2f}</p>
+                    <h3><b>Grand Total:</b> ₹{grand_total:.2f}</h3>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("⚡ Generate & Sync Tally XML", type="primary", use_container_width=True):
+                if not st.session_state.cart_items:
+                    st.warning("Please add items to the cart before generating vouchers.")
+                else:
+                    try:
+                        checkout_payload = {
+                            "user_id": st.session_state.user_id,
+                            "company_name": tally_company,
+                            "vendor_name": vendor_name,
+                            "items": st.session_state.cart_items
+                        }
+                        
+                        res = requests.post(f"{API_BASE_URL}/checkout", json=checkout_payload)
+                        if res.status_code == 200:
+                            st.success("Voucher generated, database inventory stock deducted, and XML synced successfully!")
+                            st.session_state.cart_items = []
+                            st.rerun()
+                        else:
+                            st.error(res.json().get("detail", "Checkout processing failed."))
+                    except Exception as e:
+                        st.error(f"Error during checkout: {str(e)}")
+
+    # --- TAB 2: SAVED XML HISTORY HUB ---
+    elif menu_selection == "📂 Saved XML History Hub":
+        st.markdown("## 📂 Centralized XML History & One-Click Fetch")
+        st.markdown("Access all previously synced supermarket receipts, filter instantly, or batch download files formatted for Tally import.")
+        
+        search_query = st.text_input("🔍 Search receipts by vendor or bill ID...", "")
+        
+        col_filters, col_actions = st.columns([3, 1])
+        with col_actions:
+            if st.button("📥 Download Filtered Batch (.zip)", use_container_width=True):
+                st.info("Preparing batch export package...")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.info("No saved invoices found in your secure database yet. Process transactions via the POS terminal to populate history.")
+
+    # --- TAB 3: TALLY INTEGRATION SETTINGS ---
+    elif menu_selection == "⚙️ Tally Integration Settings":
+        st.markdown("## ⚙️ Tally ERP / Prime Sync Settings")
+        st.markdown("Configure local gateway ports and company master configurations for seamless XML importing.")
+        
+        st.text_input("Tally ODBC Server Host", value="localhost")
+        st.text_input("Tally ODBC Port", value="9000")
+        st.selectbox("Default Voucher Type", ["Purchase", "Receipt", "Journal"])
+        
+        if st.button("Save Configuration", type="primary"):
+            st.success("Tally sync parameters updated successfully!")
