@@ -4,6 +4,7 @@ import os
 import cv2
 import numpy as np
 import joblib
+import fitz  # PyMuPDF
 from dotenv import load_dotenv
 from extractor import extract_invoice_data
 from validator import validate_invoice_math
@@ -62,20 +63,46 @@ def extract_features(img_gray):
         np.mean(solidity_vals) if solidity_vals else 0
     ]
 
-def is_valid_typed_invoice(image_bytes: bytes) -> bool:
-    """Runs local ML structural gatekeeper check to block handwritten or invalid files."""
+def convert_bytes_to_cv2_gray(file_bytes: bytes, filename: str, mime_type: str) -> np.ndarray:
+    """
+    Converts raw file bytes (supporting both PDFs and standard images) 
+    into a grayscale OpenCV image matrix.
+    """
+    if mime_type == "application/pdf" or filename.lower().endswith('.pdf'):
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+        if len(doc) == 0:
+            return None
+        page = doc[0]
+        zoom = 2.0  # High-res rendering for sharper contour extraction
+        mat = fitz.Matrix(zoom, zoom)
+        pix = page.get_pixmap(matrix=mat)
+        
+        img_data = np.frombuffer(pix.samples, dtype=np.uint8)
+        if pix.n == 4:
+            img = img_data.reshape((pix.h, pix.w, 4))
+            img = cv2.cvtColor(img, cv2.COLOR_RGBA2GRAY)
+        elif pix.n == 3:
+            img = img_data.reshape((pix.h, pix.w, 3))
+            img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        else:
+            img = img_data.reshape((pix.h, pix.w))
+        return img
+    else:
+        nparr = np.frombuffer(file_bytes, np.uint8)
+        return cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
+
+def is_valid_typed_invoice(file_bytes: bytes, filename: str, mime_type: str) -> bool:
+    """Runs local ML structural gatekeeper check to block handwritten or invalid files for both images and PDFs."""
     if gatekeeper_model is None:
         return True  # Fallback if model isn't present
         
     try:
-        nparr = np.frombuffer(image_bytes, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
-        
-        if img is None:
-            return False  # Failed to decode as image
+        img_gray = convert_bytes_to_cv2_gray(file_bytes, filename, mime_type)
+        if img_gray is None:
+            return False
             
         # Extract the exact contour features
-        features = extract_features(img)
+        features = extract_features(img_gray)
         
         # Predict class (returns 'typed' or 'handwritten')
         prediction = gatekeeper_model.predict([features])[0]
@@ -87,17 +114,18 @@ def is_valid_typed_invoice(image_bytes: bytes) -> bool:
 @app.post("/process-invoice", response_class=PlainTextResponse)
 async def process_invoice(file: UploadFile = File(...), company_name: str = "My Company"):
     """
-    Receives an inward purchase invoice, runs ML structural gatekeeper, parses via Gemini,
-    runs math checks, and outputs a Tally-compliant XML file.
+    Receives an inward purchase invoice (PDF or Image), runs ML structural gatekeeper, 
+    parses via Gemini, runs math checks, and outputs a Tally-compliant XML file.
     """
     if not os.getenv("GEMINI_API_KEY"):
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY environment variable is missing.")
     
     file_bytes = await file.read()
     mime_type = file.content_type or "application/pdf"
+    filename = file.filename or "invoice.pdf"
     
-    # Step 0: ML Gatekeeper Validation (Blocks handwriting/noise locally before API calls)
-    if mime_type.startswith("image/") and not is_valid_typed_invoice(file_bytes):
+    # Step 0: ML Gatekeeper Validation (Blocks handwriting/noise locally for both PDFs and images)
+    if not is_valid_typed_invoice(file_bytes, filename, mime_type):
         raise HTTPException(
             status_code=400, 
             detail="Gatekeeper Blocked: Uploaded file appears to be handwritten or invalid noise. Please provide a structured digital invoice."
