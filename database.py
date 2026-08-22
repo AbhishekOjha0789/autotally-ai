@@ -110,3 +110,7 @@ def add_or_update_product_db(barcode: str, name: str, price: float, stock: int):
         }
         products_collection.insert_one(new_prod)
         return True, f"Successfully added new product: {name}."
+
+def get_all_products_db():
+    """Fetches all products in inventory."""
+    return list(products_collection.find({}, {"_id": 0}))

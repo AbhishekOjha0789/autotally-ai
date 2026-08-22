@@ -16,6 +16,7 @@ from typing import List
 # Import the new POS database functions from database.py
 from database import (
     add_or_update_product_db,
+    get_all_products_db,
     register_user_db, 
     authenticate_user_db, 
     get_product_by_barcode, 
@@ -241,3 +242,8 @@ def add_product(payload: ProductAddRequest):
     if not success:
         raise HTTPException(status_code=400, detail=message)
     return {"success": True, "message": message}
+
+@app.get("/products/all")
+def get_all_products():
+    """Returns all inventory items for management view."""
+    return get_all_products_db()

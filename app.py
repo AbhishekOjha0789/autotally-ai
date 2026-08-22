@@ -77,19 +77,23 @@ if not st.session_state.logged_in:
                 
                 if l_submit:
                     if l_user.strip() and l_pass.strip():
-                        try:
-                            res = requests.post(f"{API_BASE_URL}/login", json={"username": l_user, "password": l_pass})
-                            if res.status_code == 200:
-                                data = res.json()
-                                st.session_state.logged_in = True
-                                st.session_state.user_id = data["user_id"]
-                                st.session_state.username = l_user
-                                st.success("Authentication successful!")
-                                st.rerun()
-                            else:
-                                st.error(res.json().get("detail", "Invalid credentials."))
-                        except:
-                            st.error("Connection failed. Check backend server.")
+                        # Show a spinner because free servers take a few seconds on cold starts
+                        with st.spinner("Connecting to secure server (Waking up cloud instance)..."):
+                            try:
+                                res = requests.post(f"{API_BASE_URL}/login", json={"username": l_user, "password": l_pass}, timeout=15)
+                                if res.status_code == 200:
+                                    data = res.json()
+                                    st.session_state.logged_in = True
+                                    st.session_state.user_id = data["user_id"]
+                                    st.session_state.username = l_user
+                                    st.success("Authentication successful!")
+                                    st.rerun()
+                                else:
+                                    st.error(res.json().get("detail", "Invalid credentials."))
+                            except requests.exceptions.Timeout:
+                                st.warning("Server is waking up from sleep mode. Please click the button again in 5 seconds!")
+                            except:
+                                st.error("Connection failed. Check backend server.")
                     else:
                         st.error("Please fill in all fields.")
                         
@@ -101,19 +105,22 @@ if not st.session_state.logged_in:
                 
                 if r_submit:
                     if r_user.strip() and r_pass.strip():
-                        try:
-                            res = requests.post(f"{API_BASE_URL}/register", json={"username": r_user, "password": r_pass})
-                            if res.status_code == 200:
-                                data = res.json()
-                                st.session_state.logged_in = True
-                                st.session_state.user_id = data["user_id"]
-                                st.session_state.username = r_user
-                                st.success("Account created successfully!")
-                                st.rerun()
-                            else:
-                                st.error(res.json().get("detail", "Registration failed."))
-                        except:
-                            st.error("Connection failed. Check backend server.")
+                        with st.spinner("Connecting to secure server (Waking up cloud instance)..."):
+                            try:
+                                res = requests.post(f"{API_BASE_URL}/register", json={"username": r_user, "password": r_pass}, timeout=15)
+                                if res.status_code == 200:
+                                    data = res.json()
+                                    st.session_state.logged_in = True
+                                    st.session_state.user_id = data["user_id"]
+                                    st.session_state.username = r_user
+                                    st.success("Account created successfully!")
+                                    st.rerun()
+                                else:
+                                    st.error(res.json().get("detail", "Registration failed."))
+                            except requests.exceptions.Timeout:
+                                st.warning("Server is waking up from sleep mode. Please click the button again in 5 seconds!")
+                            except:
+                                st.error("Connection failed. Check backend server.")
                     else:
                         st.error("Please fill in all fields.")
 
@@ -238,16 +245,16 @@ else:
                     except Exception as e:
                         st.error(f"Error during checkout: {str(e)}")
 
-    # --- TAB 2: INVENTORY MANAGEMENT (NEWLY ADDED) ---
+    # --- TAB 2: INVENTORY MANAGEMENT & LIVE STOCK VIEW ---
     elif menu_selection == "📦 Inventory Management":
         st.markdown("## 📦 Supermarket Inventory & Stock Control")
-        st.markdown("Scan or type a barcode to add new products to your database or restock existing inventory items.")
+        st.markdown("Add new stock or view real-time inventory levels across your store.")
         
-        col_form, col_info = st.columns([1.5, 1])
+        col_form, col_table = st.columns([1, 1.5])
         
         with col_form:
             with st.form("add_product_form", clear_on_submit=True):
-                st.markdown("### Add / Restock Item")
+                st.markdown("### ➕ Add / Restock Item")
                 inv_barcode = st.text_input("Product Barcode / SKU")
                 inv_name = st.text_input("Product Name")
                 inv_price = st.number_input("Selling Price (₹)", min_value=0.0, value=50.0)
@@ -257,31 +264,47 @@ else:
                 
                 if submit_inv:
                     if inv_barcode.strip() and inv_name.strip():
-                        try:
-                            payload = {
-                                "barcode": inv_barcode.strip(),
-                                "name": inv_name.strip(),
-                                "price": inv_price,
-                                "stock": inv_stock
-                            }
-                            res = requests.post(f"{API_BASE_URL}/product/add", json=payload)
-                            if res.status_code == 200:
-                                st.success(res.json().get("message", "Inventory updated successfully!"))
-                            else:
-                                st.error(res.json().get("detail", "Failed to update inventory."))
-                        except Exception as e:
-                            st.error(f"Connection error: {str(e)}")
+                        with st.spinner("Updating inventory..."):
+                            try:
+                                payload = {
+                                    "barcode": inv_barcode.strip(),
+                                    "name": inv_name.strip(),
+                                    "price": inv_price,
+                                    "stock": inv_stock
+                                }
+                                res = requests.post(f"{API_BASE_URL}/product/add", json=payload, timeout=10)
+                                if res.status_code == 200:
+                                    st.success(res.json().get("message", "Inventory updated successfully!"))
+                                    st.rerun()
+                                else:
+                                    st.error(res.json().get("detail", "Failed to update inventory."))
+                            except Exception as e:
+                                st.error(f"Connection error: {str(e)}")
                     else:
                         st.error("Please fill in both the barcode and product name.")
                         
-        with col_info:
-            st.markdown("""
-                <div style='background: #1e293b; padding: 20px; border-radius: 8px; border: 1px solid #334155;'>
-                    <h4>💡 How Restocking Works</h4>
-                    <p>• If you enter a <b>new barcode</b>, it creates a brand new product in your MongoDB database.</p>
-                    <p>• If you enter an <b>existing barcode</b>, it updates the price and adds the new quantity directly to your active stock count.</p>
-                </div>
-            """, unsafe_allow_html=True)
+        with col_table:
+            st.markdown("### 📊 Live Stock Catalog")
+            try:
+                res = requests.get(f"{API_BASE_URL}/products/all", timeout=10)
+                if res.status_code == 200:
+                    products = res.json()
+                    if products:
+                        table_data = []
+                        for p in products:
+                            table_data.append({
+                                "Barcode": p.get("barcode"),
+                                "Product Name": p.get("name"),
+                                "Price (₹)": p.get("price"),
+                                "Stock Qty": p.get("stock")
+                            })
+                        st.dataframe(table_data, use_container_width=True, hide_index=True)
+                    else:
+                        st.info("No products found in database. Add one using the form on the left!")
+                else:
+                    st.warning("Could not fetch inventory stock.")
+            except:
+                st.error("Connection failed while reaching inventory database.")
 
     # --- TAB 3: SAVED XML HISTORY HUB ---
     elif menu_selection == "📂 Saved XML History Hub":
