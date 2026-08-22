@@ -12,6 +12,7 @@ from builder import generate_tally_xml
 
 from pydantic import BaseModel
 from typing import List
+from datetime import datetime
 
 # Import the new POS database functions from database.py
 from database import (
@@ -21,7 +22,8 @@ from database import (
     authenticate_user_db, 
     get_product_by_barcode, 
     process_pos_checkout,
-    receipts_collection
+    receipts_collection,
+    products_collection
 )
 
 load_dotenv()  # Load environment variables from .env file
@@ -205,25 +207,70 @@ class CheckoutRequest(BaseModel):
     vendor_name: str
     items: List[CartItem]
 
+# (Inside your main.py / checkout route)
 @app.post("/checkout")
-def checkout(payload: CheckoutRequest):
-    """
-    Processes the POS cart checkout: decrements stock from inventory and saves the voucher log.
-    """
-    # Convert Pydantic items to dictionaries
-    items_list = [item.dict() for item in payload.items]
+def checkout_order(payload: dict):
+    user_id = payload.get("user_id")
+    company_name = payload.get("company_name")
+    vendor_name = payload.get("vendor_name")
+    items = payload.get("items", [])
     
-    success, message = process_pos_checkout(
-        user_id=payload.user_id,
-        company_name=payload.company_name,
-        vendor_name=payload.vendor_name,
-        items=items_list
-    )
+    if not items:
+        raise HTTPException(status_code=400, detail="Cart is empty.")
     
-    if not success:
-        raise HTTPException(status_code=400, detail=message)
+    # 1. Calculate totals securely on the backend
+    subtotal = sum(item["rate"] * item["quantity"] for item in items)
+    tax_amount = subtotal * 0.05  # 5% tax or your applicable rate
+    grand_total = subtotal + tax_amount
+    
+    # 2. Generate Tally XML string for this receipt (if applicable)
+    xml_data = f"""<ENVELOPE>
+    <HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER>
+    <BODY>
+        <IMPORTDATA>
+            <REQUESTDESC>
+                <REPORTNAME>Vouchers</REPORTNAME>
+            </REQUESTDESC>
+            <REQUESTDATA>
+                <TALLYMESSAGE xmlns:UDF="TallyUDF">
+                    <VOUCHER VCHTYPE="Purchase" ACTION="Create">
+                        <PARTYLEDGERNAME>{vendor_name}</PARTYLEDGERNAME>
+                        <COMPANYNAME>{company_name}</COMPANYNAME>
+                        <AMOUNT>{grand_total}</AMOUNT>
+                    </VOUCHER>
+                </TALLYMESSAGE>
+            </REQUESTDATA>
+        </IMPORTDATA>
+    </BODY>
+</ENVELOPE>"""
+
+    # 3. Construct the document with grand_total included
+    receipt_doc = {
+        "user_id": user_id,
+        "company_name": company_name,
+        "vendor_name": vendor_name,
+        "items": items,
+        "subtotal": subtotal,
+        "tax_amount": tax_amount,
+        "grand_total": grand_total,  # <-- Saving total amount here
+        "xml_data": xml_data,
+        "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    
+    # 4. Insert into MongoDB receipts collection
+    try:
+        receipts_collection.insert_one(receipt_doc)
         
-    return {"success": True, "message": message}
+        # Deduct stock from products collection
+        for item in items:
+            products_collection.update_one(
+                {"barcode": item["barcode"]},
+                {"$inc": {"stock": -item["quantity"]}}
+            )
+            
+        return {"message": "Checkout successful", "grand_total": grand_total}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 class ProductAddRequest(BaseModel):
     barcode: str

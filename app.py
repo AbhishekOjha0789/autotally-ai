@@ -287,10 +287,11 @@ else:
             grand_total = subtotal + tax_amount
             
             st.markdown(f"""
-                <div style='background: #1e293b; padding: 16px; border-radius: 8px; border: 1px solid #334155;'>
-                    <p><b>Subtotal:</b> ₹{subtotal:.2f}</p>
-                    <p><b>Estimated Tax (5%):</b> ₹{tax_amount:.2f}</p>
-                    <h3><b>Grand Total:</b> ₹{grand_total:.2f}</h3>
+                <div style='background: #1e293b; padding: 16px; border-radius: 8px; border: 1px solid #334155; color: #f8fafc;'>
+                    <p style='color: #cbd5e1; margin-bottom: 8px;'><b>Subtotal:</b> ₹{subtotal:.2f}</p>
+                    <p style='color: #cbd5e1; margin-bottom: 12px;'><b>Estimated Tax (5%):</b> ₹{tax_amount:.2f}</p>
+                    <hr style='border: 0; border-top: 1px solid #334155; margin: 10px 0;'>
+                    <h3 style='color: #38bdf8; margin: 0;'><b>Grand Total:</b> ₹{grand_total:.2f}</h3>
                 </div>
             """, unsafe_allow_html=True)
             
